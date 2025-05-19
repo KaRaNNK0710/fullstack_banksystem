@@ -26,11 +26,19 @@ interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (transaction: Transaction) => void;
+  initialTransactionType?: 'deposit' | 'withdrawal' | 'transfer' | null;
 }
 
-const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const TransactionModal: React.FC<TransactionModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialTransactionType
+}) => {
   const { currentUser } = useAuth();
-  const [type, setType] = useState<'deposit' | 'withdrawal' | 'transfer'>('deposit');
+  const [type, setType] = useState<'deposit' | 'withdrawal' | 'transfer'>(
+    initialTransactionType || 'deposit'
+  );
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [counterparty, setCounterparty] = useState('');
