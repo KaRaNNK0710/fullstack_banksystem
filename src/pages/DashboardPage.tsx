@@ -5,8 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import PageLayout from '../components/layout/PageLayout';
 import AccountCard from '../components/dashboard/AccountCard';
 import TransactionsList from '../components/dashboard/TransactionsList';
-import { Plus, CreditCard, ArrowUpRight, ArrowDownLeft, RefreshCw } from 'lucide-react';
-import AccountSummary from '../components/dashboard/AccountSummary';
+import { ArrowUpRight, ArrowDownLeft, CreditCard, RefreshCw } from 'lucide-react';
+import TransactionModal from '../components/transactions/TransactionModal';
+import CreateAccountModal from '../components/accounts/CreateAccountModal';
 
 interface Account {
   id: string;
@@ -28,11 +29,13 @@ interface Transaction {
 }
 
 const DashboardPage: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userData } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalBalance, setTotalBalance] = useState(0);
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [selectedTransactionType, setSelectedTransactionType] = useState<'deposit' | 'withdrawal' | 'transfer' | null>(null);
 
   useEffect(() => {
     const fetchAccountsAndTransactions = async () => {
@@ -46,35 +49,30 @@ const DashboardPage: React.FC = () => {
         );
         const accountsSnapshot = await getDocs(accountsQuery);
         const accountsList: Account[] = [];
-        let total = 0;
 
         accountsSnapshot.forEach((doc) => {
-          const accountData = doc.data() as Account;
           accountsList.push({
             id: doc.id,
-            ...accountData
+            ...doc.data() as Account
           });
-          total += accountData.balance;
         });
 
         setAccounts(accountsList);
-        setTotalBalance(total);
 
         // Fetch recent transactions
         const transactionsQuery = query(
           collection(db, 'transactions'),
           where('userId', '==', currentUser.uid),
           orderBy('date', 'desc'),
-          limit(10)
+          limit(5)
         );
         const transactionsSnapshot = await getDocs(transactionsQuery);
         const transactionsList: Transaction[] = [];
 
         transactionsSnapshot.forEach((doc) => {
-          const transactionData = doc.data() as Transaction;
           transactionsList.push({
             id: doc.id,
-            ...transactionData
+            ...doc.data() as Transaction
           });
         });
 
@@ -89,146 +87,147 @@ const DashboardPage: React.FC = () => {
     fetchAccountsAndTransactions();
   }, [currentUser]);
 
-  // Sample data for testing if no real data exists
-  useEffect(() => {
-    if (!loading && transactions.length === 0) {
-      const sampleTransactions: Transaction[] = [
-        {
-          id: '1',
-          type: 'deposit',
-          amount: 1500,
-          currency: 'USD',
-          description: 'Salary Deposit',
-          date: new Date().toISOString(),
-          counterparty: 'ACME Corp'
-        },
-        {
-          id: '2',
-          type: 'withdrawal',
-          amount: 120,
-          currency: 'USD',
-          description: 'ATM Withdrawal',
-          date: new Date(Date.now() - 86400000).toISOString()
-        },
-        {
-          id: '3',
-          type: 'transfer',
-          amount: 350,
-          currency: 'USD',
-          description: 'Money Transfer',
-          date: new Date(Date.now() - 172800000).toISOString(),
-          counterparty: 'John Doe'
-        }
-      ];
-      setTransactions(sampleTransactions);
+  const handleQuickAction = (action: 'transfer' | 'deposit' | 'withdrawal' | 'newAccount') => {
+    if (action === 'newAccount') {
+      setIsAccountModalOpen(true);
+    } else {
+      setSelectedTransactionType(action);
+      setIsTransactionModalOpen(true);
     }
+  };
 
-    if (!loading && accounts.length === 0) {
-      const sampleAccounts: Account[] = [
-        {
-          id: '1',
-          accountType: 'Savings',
-          accountNumber: 'SAV-123456',
-          balance: 2500,
-          currency: 'USD',
-          isActive: true
-        },
-        {
-          id: '2',
-          accountType: 'Checking',
-          accountNumber: 'CHK-789012',
-          balance: 1200,
-          currency: 'USD',
-          isActive: true
-        }
-      ];
-      setAccounts(sampleAccounts);
-      setTotalBalance(sampleAccounts.reduce((sum, account) => sum + account.balance, 0));
-    }
-  }, [loading, transactions.length, accounts.length]);
+  const getTotalBalance = () => {
+    return accounts.reduce((sum, account) => sum + account.balance, 0);
+  };
 
   return (
     <PageLayout>
-      <div className="pb-12">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Welcome back!</h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="py-6">
+          <h1 className="text-2xl font-semibold text-gray-900">Welcome back, {userData?.fullName}!</h1>
           <p className="mt-1 text-sm text-gray-500">Here's an overview of your finances.</p>
         </div>
 
         {/* Account Summary */}
-        <AccountSummary totalBalance={totalBalance} totalAccounts={accounts.length} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-sm font-medium text-gray-500">Total Balance</h2>
+            <p className="mt-2 text-3xl font-semibold text-gray-900">${getTotalBalance().toLocaleString()}</p>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-sm font-medium text-gray-500">Active Accounts</h2>
+            <p className="mt-2 text-3xl font-semibold text-gray-900">{accounts.length}</p>
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-sm font-medium text-gray-500">Recent Transactions</h2>
+            <p className="mt-2 text-3xl font-semibold text-gray-900">{transactions.length}</p>
+          </div>
+        </div>
 
         {/* Quick Actions */}
-        <div className="mt-8 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <button className="flex flex-col items-center justify-center bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mb-2">
-                <ArrowUpRight size={20} />
+        <div className="mb-8">
+          <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button
+              onClick={() => handleQuickAction('transfer')}
+              className="flex items-center p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+            >
+              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 mr-3">
+                <ArrowUpRight className="h-5 w-5" />
               </div>
-              <span className="text-sm font-medium text-gray-700">Transfer</span>
+              <span className="font-medium">Transfer</span>
             </button>
-            <button className="flex flex-col items-center justify-center bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-2">
-                <ArrowDownLeft size={20} />
+            <button
+              onClick={() => handleQuickAction('deposit')}
+              className="flex items-center p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+            >
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 mr-3">
+                <ArrowDownLeft className="h-5 w-5" />
               </div>
-              <span className="text-sm font-medium text-gray-700">Deposit</span>
+              <span className="font-medium">Deposit</span>
             </button>
-            <button className="flex flex-col items-center justify-center bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-2">
-                <CreditCard size={20} />
+            <button
+              onClick={() => handleQuickAction('newAccount')}
+              className="flex items-center p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+            >
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mr-3">
+                <CreditCard className="h-5 w-5" />
               </div>
-              <span className="text-sm font-medium text-gray-700">New Account</span>
+              <span className="font-medium">New Account</span>
             </button>
-            <button className="flex flex-col items-center justify-center bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 mb-2">
-                <RefreshCw size={20} />
+            <button
+              onClick={() => handleQuickAction('withdrawal')}
+              className="flex items-center p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+            >
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 mr-3">
+                <RefreshCw className="h-5 w-5" />
               </div>
-              <span className="text-sm font-medium text-gray-700">History</span>
+              <span className="font-medium">Withdraw</span>
             </button>
           </div>
         </div>
 
-        {/* Accounts Section */}
-        <div className="mt-8">
+        {/* Accounts */}
+        <div className="mb-8">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Your Accounts</h2>
-            <button className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none">
-              <Plus className="mr-1 h-4 w-4" /> New Account
+            <h2 className="text-lg font-medium text-gray-900">Your Accounts</h2>
+            <button
+              onClick={() => setIsAccountModalOpen(true)}
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+            >
+              + Add New Account
             </button>
           </div>
-
-          {loading ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-gray-100 h-48 rounded-lg animate-pulse"></div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {accounts.map((account) => (
-                <AccountCard
-                  key={account.id}
-                  accountType={account.accountType}
-                  accountNumber={account.accountNumber}
-                  balance={account.balance}
-                  currency={account.currency}
-                  isActive={account.isActive}
-                />
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {accounts.map((account) => (
+              <AccountCard
+                key={account.id}
+                accountType={account.accountType}
+                accountNumber={account.accountNumber}
+                balance={account.balance}
+                currency={account.currency}
+                isActive={account.isActive}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Recent Transactions */}
-        <div className="mt-10">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h2>
-          {loading ? (
-            <div className="bg-white rounded-lg shadow h-64 animate-pulse"></div>
-          ) : (
-            <TransactionsList transactions={transactions} />
-          )}
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium text-gray-900">Recent Transactions</h2>
+            <button
+              onClick={() => setIsTransactionModalOpen(true)}
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+            >
+              + New Transaction
+            </button>
+          </div>
+          <TransactionsList transactions={transactions} />
         </div>
+
+        {/* Modals */}
+        <TransactionModal
+          isOpen={isTransactionModalOpen}
+          onClose={() => {
+            setIsTransactionModalOpen(false);
+            setSelectedTransactionType(null);
+          }}
+          onSuccess={(transaction) => {
+            setTransactions([transaction, ...transactions]);
+            setIsTransactionModalOpen(false);
+          }}
+          initialTransactionType={selectedTransactionType}
+        />
+
+        <CreateAccountModal
+          isOpen={isAccountModalOpen}
+          onClose={() => setIsAccountModalOpen(false)}
+          onSuccess={(account) => {
+            setAccounts([...accounts, account]);
+            setIsAccountModalOpen(false);
+          }}
+        />
       </div>
     </PageLayout>
   );
