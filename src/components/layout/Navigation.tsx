@@ -35,7 +35,7 @@ const Navigation: React.FC = () => {
 
   const navigationLinks = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Accounts', href: '/accounts', icon: CreditCard },
+    // { name: 'Accounts', href: '/accounts', icon: CreditCard },
     { name: 'Transactions', href: '/transactions', icon: RefreshCw },
     { name: 'Profile', href: '/profile', icon: User },
   ];
